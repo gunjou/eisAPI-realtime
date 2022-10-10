@@ -44,7 +44,7 @@ def count_values(data, param):
     return cnt
 
 
-@realtime_bp.route('/ketersediaan_bed')
+@realtime_bp.route('/realtime/ketersediaan_bed')
 def ketersediaan_bed():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -74,12 +74,12 @@ def ketersediaan_bed():
     return jsonify(result)
 
 
-@realtime_bp.route('/tren_pelayanan')
+@realtime_bp.route('/realtime/tren_pelayanan')
 def tren_pelayanan():
     return jsonify({"message": "ini data tren pelayanan"})
 
 
-@realtime_bp.route('/absensi_pegawai')
+@realtime_bp.route('/realtime/absensi_pegawai')
 def absensi_pegawai():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -109,7 +109,7 @@ def absensi_pegawai():
     return jsonify(result)
 
 
-@realtime_bp.route('/pelayanan_instalasi')
+@realtime_bp.route('/realtime/pelayanan_instalasi')
 def pelayanan_instalasi():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -143,7 +143,7 @@ def pelayanan_instalasi():
     return jsonify(result)
 
 
-@realtime_bp.route('/asal_rujukan')
+@realtime_bp.route('/realtime/asal_rujukan')
 def asal_rujukan():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -176,7 +176,7 @@ def asal_rujukan():
     return jsonify(result)
     
 
-@realtime_bp.route('/kelompok_pasien')
+@realtime_bp.route('/realtime/kelompok_pasien')
 def kelompok_pasien():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -210,7 +210,7 @@ def kelompok_pasien():
     return jsonify(result)
 
 
-@realtime_bp.route('/pasien_usia_gender')
+@realtime_bp.route('/realtime/pasien_usia_gender')
 def pasien_usia_gender():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -245,7 +245,7 @@ def pasien_usia_gender():
     return jsonify(result)
 
 
-@realtime_bp.route('/pendapatan_jenis_produk')
+@realtime_bp.route('/realtime/pendapatan_jenis_produk')
 def pendapatan_jenis_produk():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -281,7 +281,7 @@ def pendapatan_jenis_produk():
     return jsonify(result)
 
 
-@realtime_bp.route('/pendapatan_instalasi')
+@realtime_bp.route('/realtime/pendapatan_instalasi')
 def pendapatan_instalasi():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -319,7 +319,7 @@ def pendapatan_instalasi():
     return jsonify(result)
 
 
-@realtime_bp.route('/pendapatan_cara_bayar')
+@realtime_bp.route('/realtime/pendapatan_cara_bayar')
 def pendapatan_cara_bayar():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
@@ -356,7 +356,7 @@ def pendapatan_cara_bayar():
     return jsonify(result)
 
 
-@realtime_bp.route('/pendapatan_kelas')
+@realtime_bp.route('/realtime/pendapatan_kelas')
 def pendapatan_kelas():
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
