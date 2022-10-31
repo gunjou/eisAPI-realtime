@@ -3,13 +3,10 @@ from datetime import date, datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 from flask import Blueprint, jsonify, request
-from sqlalchemy import text
 
-from api.config import get_connection
-
+from api.query import *
 
 realtime_bp = Blueprint('realtime', __name__)
-engine = get_connection()
 
 
 def get_default_date(tgl_awal, tgl_akhir):
@@ -40,32 +37,32 @@ def get_categorical_age(birth_date):
 def count_values(data, param):
     cnt = Counter()
     for i in range(len(data)):
-        cnt[data[i][param].lower().replace(' ', '_')] += 1
+        cnt[data[i][param]] += 1
     return cnt
 
 
 @realtime_bp.route('/realtime/ketersediaan_bed')
 def ketersediaan_bed():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT DISTINCT vjbpr.Kelas, vjbpr.JmlBed
-            FROM dbo.V_JmlBedPerRuangan vjbpr;"""))
-    data = []
-    for row in result:
-        data.append({
-            "kelas": row['Kelas'],
-            "jumlah_bed": row['JmlBed']
-        })
-    cnt = Counter()
-    for i in range(len(data)):
-        cnt[data[i]['kelas'].lower().replace(' ', '_')] += data[i]['jumlah_bed']
+
+    # Get query result
+    result = query_ketersediaan_bed()
+    
+    # Extract data by date (dict)
+    tmp = [{"kelas": row['Kelas'], "jumlah_bed": row['JmlBed']} for row in result]
+
+    # Extract data as (dataframe)
+    cnts = count_values(tmp, 'kelas')
+    data = [{"name": x, "value": y} for x, y in cnts.items()]
+    
+    # Define return result as a json
     result = {
         "judul": 'Ketersediaan Bed',
         "label": 'Live Reports',
-        "tersedia": cnt,
+        "data": data,
         "tgl_filter": {
             "tgl_awal": tgl_awal,
             "tgl_akhir": tgl_akhir
@@ -81,26 +78,26 @@ def tren_pelayanan():
 
 @realtime_bp.route('/realtime/absensi_pegawai')
 def absensi_pegawai():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT evap.Tanggal, evap.Keterangan
-            FROM dbo.EIS_ViewAbsensiPegawai evap
-            WHERE evap.Tanggal >= '{tgl_awal}'
-            AND evap.Tanggal < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY evap.Tanggal ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['Tanggal'],
-            "status_absensi": row['Keterangan'].split("\r")[0]
-        })
+
+    # Get query result
+    result = query_absensi_pegawai(tgl_awal, tgl_akhir + timedelta(days=1))
+
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['Tanggal'], "status_absensi": row['Keterangan']} for row in result]
+    
+    # Extract data as (dataframe)
+    cnts = count_values(tmp, 'status_absensi')
+    data = [{"name": x, "value": y} for x, y in cnts.items()]
+
+    # Define return result as a json    
     result = {
         "judul": 'Absensi Pegawai',
         "label": 'Live Reports',
-        "status_absensi": count_values(data, 'status_absensi'),
+        "data": data, #count_values(data, 'status_absensi'),
         "tgl_filter": {
             "tgl_awal": tgl_awal,
             "tgl_akhir": tgl_akhir
@@ -111,30 +108,26 @@ def absensi_pegawai():
 
 @realtime_bp.route('/realtime/pelayanan_instalasi')
 def pelayanan_instalasi():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT bp.TglPelayanan, i.NamaInstalasi
-            FROM dbo.BiayaPelayanan bp
-            INNER JOIN dbo.Ruangan r
-            ON bp.KdRuangan = r.KdRuangan
-            INNER JOIN dbo.Instalasi i
-            ON r.KdInstalasi = i.KdInstalasi
-            WHERE bp.TglPelayanan >= '{tgl_awal}'
-            AND bp.TglPelayanan < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY bp.TglPelayanan ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TglPelayanan'],
-            "instalasi": row['NamaInstalasi'].split("\r")[0]
-        })
+
+    # Get query result
+    result = query_pelayanan_instalasi(tgl_awal, tgl_akhir + timedelta(days=1))
+
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglPelayanan'], "instalasi": row['NamaInstalasi'].split("\r")[0]} for row in result]
+
+    # Extract data as (dataframe)
+    cnts = count_values(tmp, 'instalasi')
+    data = [{"name": x, "value": y} for x, y in cnts.items()]
+    
+    # Define return result as a json
     result = {
         "judul": 'Pelayanan Instalasi',
         "label": 'Live Reports',
-        "instalasi": count_values(data, 'instalasi'),
+        "data": data, #count_values(data, 'instalasi'),
         "tgl_filter": {
             "tgl_awal": tgl_awal,
             "tgl_akhir": tgl_akhir
@@ -145,29 +138,26 @@ def pelayanan_instalasi():
 
 @realtime_bp.route('/realtime/asal_rujukan')
 def asal_rujukan():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(f"""SELECT DISTINCT bp.NoPendaftaran, ra.RujukanAsal
-            FROM rsudtasikmalaya.dbo.BiayaPelayanan bp
-            INNER JOIN rsudtasikmalaya.dbo.Rujukan r
-            ON bp.NoPendaftaran = r.NoPendaftaran
-            INNER JOIN rsudtasikmalaya.dbo.RujukanAsal ra
-            ON r.KdRujukanAsal = ra.KdRujukanAsal
-            WHERE bp.TglPelayanan >= '{tgl_awal}'
-            AND bp.TglPelayanan < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY bp.NoPendaftaran ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            # "tanggal": row['TglPelayanan'],
-            "rujukan": row['RujukanAsal']
-        })
+
+    # Get query result
+    result = query_rujukan(tgl_awal, tgl_akhir + timedelta(days=1))
+
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglPendaftaran'], "rujukan": row['RujukanAsal']} for row in result]
+
+    # Extract data as (dataframe)
+    cnts = count_values(tmp, 'rujukan')
+    data = [{"name": x, "value": y} for x, y in cnts.items()]
+
+    # Define return result as a json
     result = {
         "judul": 'Rujukan Asal Pasien',
         "label": 'Live Reports',
-        "rujukan": count_values(data, 'rujukan'),
+        "data": data, #count_values(data, 'rujukan'),
         "tgl_filter": {
             "tgl_awal": tgl_awal,
             "tgl_akhir": tgl_akhir
@@ -178,30 +168,26 @@ def asal_rujukan():
 
 @realtime_bp.route('/realtime/kelompok_pasien')
 def kelompok_pasien():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT DISTINCT bp.NoPendaftaran, pd.TglPendaftaran, kp.JenisPasien as KelompokPasien
-            FROM dbo.BiayaPelayanan bp
-            INNER JOIN dbo.PasienDaftar pd
-            ON bp.NoPendaftaran = pd.NoPendaftaran
-            INNER JOIN dbo.KelompokPasien kp
-            ON pd.KdKelasAkhir = kp.KdKelompokPasien
-            WHERE bp.TglPelayanan >= '{tgl_awal}' 
-            AND bp.TglPelayanan < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY pd.TglPendaftaran ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TglPendaftaran'],
-            "kelompok": row['KelompokPasien']
-        })
+
+    # Get query result
+    result = query_kelompok_pasien(tgl_awal, tgl_akhir + timedelta(days=1))
+
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglPendaftaran'], "kelompok": row['KelompokPasien']} for row in result]
+
+    # Extract data as (dataframe)
+    cnts = count_values(tmp, 'kelompok')
+    data = [{"name": x, "value": y} for x, y in cnts.items()]
+
+    # Define return result as a json
     result = {
         "judul": 'Kelompok Pasien',
         "label": 'Live Reports',
-        "kelompok": count_values(data, 'kelompok'),
+        "data": data, #count_values(data, 'kelompok'),
         "tgl_filter": {
             "tgl_awal": tgl_awal,
             "tgl_akhir": tgl_akhir
@@ -212,31 +198,37 @@ def kelompok_pasien():
 
 @realtime_bp.route('/realtime/pasien_usia_gender')
 def pasien_usia_gender():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(f"""SELECT DISTINCT bp.NoPendaftaran, pd.TglPendaftaran, p.TglLahir, p.JenisKelamin
-            FROM dbo.BiayaPelayanan bp
-            INNER JOIN dbo.PasienDaftar pd
-            ON bp.NoPendaftaran = pd.NoPendaftaran 
-            INNER JOIN dbo.Pasien p
-            ON pd.NoCM = p.NoCM 
-            WHERE bp.TglPelayanan >= '{tgl_awal}' 
-            AND bp.TglPelayanan < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY bp.NoPendaftaran ASC;"""))
+
+    # Get query result
+    result = query_umur_jenis_kelamin(tgl_awal, tgl_akhir + timedelta(days=1))
+    
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglPendaftaran'], "umur": get_categorical_age(row['TglLahir']), "jenis_kelamin": row['JenisKelamin']} for row in result]
+    
+    # Extract data as (dataframe)
+    cnts = count_values(tmp, 'umur')
     data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TglPendaftaran'],
-            "umur": get_categorical_age(row['TglLahir']),
-            "jenis_kelamin": row['JenisKelamin']
-        })
+    kategori_umur = [x for x, y in cnts.items()]
+    for i in kategori_umur:
+        p = 0
+        l = 0
+        for j in range(len(tmp)):
+            if tmp[j]['umur'] == i and tmp[j]['jenis_kelamin'] == 'P':
+                p += 1
+            elif tmp[j]['umur'] == i and tmp[j]['jenis_kelamin'] == 'L':
+                l += 1
+            else:
+                pass
+        data.append({"name": i, "value": l+p, "laki_laki": l, "perempuan": p})
+
     result = {
         "judul": 'Umur dan Jenis Kelamin',
-        "label": 'Live Reports',
-        "jenis_kelamin": count_values(data, 'jenis_kelamin'),
-        "umur": count_values(data, 'umur'),
+        "label": 'Kunjungan Pasien',
+        "data": data,
         "tgl_filter": {
             "tgl_awal": tgl_awal,
             "tgl_akhir": tgl_akhir
@@ -247,35 +239,28 @@ def pasien_usia_gender():
 
 @realtime_bp.route('/realtime/pendapatan_jenis_produk')
 def pendapatan_jenis_produk():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT DISTINCT evprsna.TanggalPelayanan, evprsna.Tarif, jp.Deskripsi
-            FROM dbo.EIS_ViewPendapatanRumahSakitNewAll evprsna
-            INNER JOIN dbo.ListPelayananRS lpr 
-            ON evprsna.KdPelayananRS = lpr.KdPelayananRS 
-            INNER JOIN dbo.JenisPelayanan jp 
-            ON lpr.KdJnsPelayanan = jp.KdJnsPelayanan 
-            WHERE evprsna.TanggalPelayanan >= '{tgl_awal}'
-            AND evprsna.TanggalPelayanan < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY evprsna.TanggalPelayanan ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TanggalPelayanan'],
-            "jenis_pelayanan": row['Deskripsi'],
-            "total": row['Tarif']
-        })
-    cnt = Counter()
-    for i in range(len(data)):
-        cnt[data[i]['jenis_pelayanan'].lower().replace(
-            ' ', '_')] += float(data[i]['total'])
+
+    # Get query result
+    result = query_pendapatan_produk(tgl_awal, tgl_akhir + timedelta(days=1))
+    
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TanggalPelayanan'], "jenis_pelayanan": row['Deskripsi'], "total": row['Tarif']} for row in result]
+
+    # Extract data as (dataframe)
+    cnts = Counter()
+    for i in range(len(tmp)):
+        cnts[tmp[i]['jenis_pelayanan']] += float(tmp[i]['total'])
+    data = [{"name": x, "value": round(y, 2)} for x, y in cnts.items()]
+
+    # Define return result as a json
     result = {
         "judul": 'Pendapatan Jenis Produk',
         "label": 'Live Reports',
-        "cara_bayar": cnt,
+        "data": data,
         "tgl_filter": {"tgl_awal": tgl_awal, "tgl_akhir": tgl_akhir}
     }
     return jsonify(result)
@@ -283,37 +268,28 @@ def pendapatan_jenis_produk():
 
 @realtime_bp.route('/realtime/pendapatan_instalasi')
 def pendapatan_instalasi():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT spp.TglStruk, spp.NoPendaftaran, i.NamaInstalasi , spp.TotalBiaya
-           FROM dbo.StrukPelayananPasien spp
-           INNER JOIN dbo.Ruangan r
-           ON spp.KdRuanganTerakhir = r.KdRuangan
-           INNER JOIN dbo.Instalasi i
-           ON r.KdInstalasi = i.KdInstalasi
-           WHERE spp.TglStruk >= '{tgl_awal}'
-           AND spp.TglStruk < '{tgl_akhir + timedelta(days=1)}'
-           ORDER BY spp.TglStruk ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TglStruk'],
-            "instalasi": row['NamaInstalasi'],
-            "total": row['TotalBiaya'],
-            "judul": 'Pendapatan Instalasi',
-            "label": 'Live Reports'
-        })
-    cnt = Counter()
-    for i in range(len(data)):
-        cnt[data[i]['instalasi'].lower().replace(
-            ' ', '_')] += float(data[i]['total'])
+
+    # Get query result
+    result = query_pendapatan_instalasi(tgl_awal, tgl_akhir + timedelta(days=1))
+    
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglStruk'], "instalasi": row['NamaInstalasi'], "total": row['TotalBiaya']} for row in result]
+    
+    # Extract data as (dataframe)
+    cnts = Counter()
+    for i in range(len(tmp)):
+        cnts[tmp[i]['instalasi']] += float(tmp[i]['total'])
+    data = [{"name": x, "value": round(y, 2)} for x, y in cnts.items()]
+
+    # Define return result as a json
     result = {
         "judul": 'Pendapatan Instalasi',
         "label": 'Live Reports',
-        "instalasi": cnt,
+        "data": data,
         "tgl_filter": {"tgl_awal": tgl_awal, "tgl_akhir": tgl_akhir}
     }
     return jsonify(result)
@@ -321,36 +297,28 @@ def pendapatan_instalasi():
 
 @realtime_bp.route('/realtime/pendapatan_cara_bayar')
 def pendapatan_cara_bayar():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT sbkm.TglBKM, cb.CaraBayar, sbkm.JmlBayar
-            FROM dbo.StrukBuktiKasMasuk sbkm
-            INNER JOIN dbo.CaraBayar cb
-            ON sbkm.KdCaraBayar = cb.KdCaraBayar
-            WHERE sbkm.TglBKM >= '{tgl_awal}'
-            AND sbkm.TglBKM < '{tgl_akhir + timedelta(days=1)}'
-            ORDER BY sbkm.TglBKM ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TglBKM'],
-            "cara_bayar": row['CaraBayar'],
-            "total": row['JmlBayar'],
-            "judul": 'Pendapatan Cara Bayar',
-            "label": 'Live Reports'
-        })
-    cnt = Counter()
-    for i in range(len(data)):
-        cnt[data[i]['cara_bayar'].lower().replace(
-            ' ', '_')] += float(data[i]['total'])
 
+    # Get query result
+    result = query_pendapatan_cara_bayar(tgl_awal, tgl_akhir + timedelta(days=1))
+    
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglBKM'], "cara_bayar": row['CaraBayar'], "total": row['JmlBayar']} for row in result]
+    
+    # Extract data as (dataframe)
+    cnts = Counter()
+    for i in range(len(tmp)):
+        cnts[tmp[i]['cara_bayar']] += float(tmp[i]['total'])
+    data = [{"name": x, "value": round(y, 2)} for x, y in cnts.items()]
+
+    # Define return result as a json
     result = {
         "judul": 'Pendapatan Cara Bayar',
         "label": 'Live Reports',
-        "cara_bayar": cnt,
+        "data": data,
         "tgl_filter": {"tgl_awal": tgl_awal, "tgl_akhir": tgl_akhir}
     }
     return jsonify(result)
@@ -358,37 +326,28 @@ def pendapatan_cara_bayar():
 
 @realtime_bp.route('/realtime/pendapatan_kelas')
 def pendapatan_kelas():
+    # Date Initialization
     tgl_awal = request.args.get('tgl_awal')
     tgl_akhir = request.args.get('tgl_akhir')
     tgl_awal, tgl_akhir = get_default_date(tgl_awal, tgl_akhir)
-    result = engine.execute(
-        text(
-            f"""SELECT spp.TglStruk, spp.NoPendaftaran, kp.DeskKelas, spp.TotalBiaya
-           FROM dbo.StrukPelayananPasien spp
-           INNER JOIN dbo.PasienDaftar pd
-           ON spp.NoPendaftaran = pd.NoPendaftaran
-           INNER JOIN dbo.KelasPelayanan kp
-           ON pd.KdKelasAkhir = kp.KdKelas
-           WHERE spp.TglStruk >= '{tgl_awal}'
-           AND spp.TglStruk < '{tgl_akhir + timedelta(days=1)}'
-           ORDER BY spp.TglStruk ASC;"""))
-    data = []
-    for row in result:
-        data.append({
-            "tanggal": row['TglStruk'],
-            "kelas": row['DeskKelas'],
-            "total": row['TotalBiaya'],
-            "judul": 'Pendapatan Kelas',
-            "label": 'Live Reports'
-        })
-    cnt = Counter()
-    for i in range(len(data)):
-        cnt[data[i]['kelas'].lower().replace(
-            ' ', '_')] += float(data[i]['total'])
+
+    # Get query result
+    result = query_pendapatan_kelas(tgl_awal, tgl_akhir + timedelta(days=1))
+
+    # Extract data by date (dict)
+    tmp = [{"tanggal": row['TglStruk'], "kelas": row['DeskKelas'], "total": row['TotalBiaya']} for row in result]
+
+    # Extract data as (dataframe)
+    cnts = Counter()
+    for i in range(len(tmp)):
+        cnts[tmp[i]['kelas']] += float(tmp[i]['total'])
+    data = [{"name": x, "value": round(y, 2)} for x, y in cnts.items()]
+
+    # Define return result as a json
     result = {
         "judul": 'Pendapatan Kelas',
         "label": 'Live Reports',
-        "kelas": cnt,
+        "data": data,
         "tgl_filter": {"tgl_awal": tgl_awal, "tgl_akhir": tgl_akhir}
     }
     return jsonify(result)
